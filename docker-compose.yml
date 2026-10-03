@@ -1,0 +1,10 @@
+services:
+  analytics:
+    build: .
+    environment:
+      NODE_ENV: test
+      PORT: 5000
+      ANALYTICS_RETENTION_DAYS: 365
+      ANALYTICS_PSEUDONYMISATION_KEY: ${ANALYTICS_PSEUDONYMISATION_KEY:?Set ANALYTICS_PSEUDONYMISATION_KEY in your local environment}
+    ports:
+      - "5000:5000"

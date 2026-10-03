@@ -1,0 +1,145 @@
+openapi: 3.1.0
+info:
+  title: Marketplace Analytics API
+  version: 1.0.0
+  description: Product event ingestion and product usage reporting. This API is not a technical monitoring interface.
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      summary: Service liveness
+      description: Minimal liveness only; does not report infrastructure, dependency, latency, or SLO status.
+      responses:
+        "200":
+          description: Analytics process is responding.
+  /v1/events/batch:
+    post:
+      summary: Ingest product events
+      description: Requires a trusted upstream principal with the ingest or admin role. Client-supplied role headers are ignored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [events]
+              properties:
+                events:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    $ref: "#/components/schemas/AnalyticsEvent"
+      responses:
+        "202":
+          description: Valid events accepted or dropped when analytics consent is false.
+        "403":
+          description: Ingestion principal is not authorised.
+        "409":
+          description: An event ID conflicts with previously accepted event data.
+        "422":
+          description: Event schema, version, or privacy validation failed.
+        "503":
+          description: Pseudonymisation or provider delivery is unavailable.
+  /v1/reports/summary:
+    get:
+      summary: Product analytics summary
+      description: Requires a trusted upstream analyst or admin principal; never exposes infrastructure or service health metrics.
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: environment
+          schema:
+            type: string
+            enum: [development, test, staging, production]
+      responses:
+        "200":
+          description: Event counts, unique actors and sessions, product funnel, and platform breakdown.
+        "403":
+          description: Principal is not authorised for reporting.
+        "422":
+          description: Invalid reporting date range.
+  /v1/privacy/deletion-requests:
+    post:
+      summary: Delete a user's analytics events
+      description: Requires a trusted upstream admin principal.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [userId]
+              properties:
+                userId: { type: string, minLength: 1 }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "202": { description: Deletion request processed. }
+        "403": { description: Principal is not authorised. }
+  /v1/privacy/retention/purge:
+    post:
+      summary: Purge events beyond the configured retention window
+      description: Requires a trusted upstream admin principal.
+      responses:
+        "202": { description: Retention purge completed. }
+        "403": { description: Principal is not authorised. }
+components:
+  schemas:
+    AnalyticsEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - eventId
+        - eventType
+        - version
+        - occurredAt
+        - actor
+        - platform
+        - application
+        - environment
+        - properties
+        - consent
+      properties:
+        eventId: { type: string, format: uuid }
+        eventType: { type: string, pattern: "^[a-z][a-z0-9_.-]{1,119}$" }
+        version: { type: integer, const: 1 }
+        occurredAt: { type: string, format: date-time }
+        actor:
+          type: object
+          additionalProperties: false
+          required: [type]
+          properties:
+            type: { type: string, enum: [customer, professional, staff, system, anonymous] }
+            userId: { type: string, minLength: 1, maxLength: 200 }
+        anonymousId: { type: string, minLength: 1, maxLength: 200 }
+        userId: { type: string, minLength: 1, maxLength: 200 }
+        sessionId: { type: string, minLength: 1, maxLength: 200 }
+        platform: { type: string, enum: [web, ios, android, api, unknown] }
+        application: { type: string, minLength: 1, maxLength: 100 }
+        environment: { type: string, enum: [development, test, staging, production] }
+        resourceType: { type: string, minLength: 1, maxLength: 100 }
+        resourceId: { type: string, minLength: 1, maxLength: 200 }
+        properties:
+          type: object
+          description: Flat product-context properties only. Do not include message contents, personal details, payment values, credentials, or precise location.
+          additionalProperties:
+            oneOf:
+              - { type: string, maxLength: 200 }
+              - { type: number }
+              - { type: boolean }
+        consent:
+          type: object
+          additionalProperties: false
+          required: [analytics]
+          properties:
+            analytics: { type: boolean }
+            personalised: { type: boolean }
+            updatedAt: { type: string, format: date-time }
