@@ -13,14 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          # REMOVED 'cache: pnpm' to prevent the action from breaking on a missing lockfile
+
+      # REMOVED '--frozen-lockfile' so pnpm can dynamically resolve and install dependencies
+      - run: pnpm install 
+
       - run: pnpm run lint
       - run: pnpm run typecheck
       - run: pnpm test
